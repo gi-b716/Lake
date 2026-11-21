@@ -1,4 +1,4 @@
-package com.github.gi-b716.lake;
+package com.github.gavin.lake;
 
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.init.Blocks;
