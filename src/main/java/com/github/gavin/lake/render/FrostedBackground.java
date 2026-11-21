@@ -85,7 +85,7 @@ final class FrostedBackground {
             GL20.glUniform2f(uniform("panelOrigin"), viewportX + x * scaleX,
                     viewportY + (float) (guiHeight - y - height) * scaleY);
             GL20.glUniform2f(uniform("panelSize"), width * scaleX, height * scaleY);
-            float blurScale = height / 26f;
+            float blurScale = radius / 6f;
             GL20.glUniform2f(uniform("blurStep"), 2.4f * blurScale * scaleX / textureWidth,
                     2.4f * blurScale * scaleY / textureHeight);
             GL20.glUniform1f(uniform("radius"), radius * Math.min(scaleX, scaleY));

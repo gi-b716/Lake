@@ -4,14 +4,18 @@ import com.github.gavin.lake.render.AcrylicRenderer;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.client.event.GuiScreenEvent;
+import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
+import java.util.function.DoubleSupplier;
+import java.util.function.IntSupplier;
 
 public final class NotificationManager {
-    private static final int MAX_NOTIFICATIONS = 4;
-    private static final long LIFETIME_NANOS = 3_400_000_000L;
+    private static final int MAX_NOTIFICATIONS = 8;
     private static final long ENTER_NANOS = 220_000_000L;
     private static final long EXIT_NANOS = 260_000_000L;
 
@@ -19,15 +23,27 @@ public final class NotificationManager {
     private final AcrylicRenderer ui = new AcrylicRenderer();
     private final NotificationRenderer renderer = new NotificationRenderer(ui);
     private long lastFrameNanos;
+    private BooleanSupplier enabled = () -> true;
+    private DoubleSupplier duration = () -> 3.4;
+    private IntSupplier maximum = () -> 4;
+    private BooleanSupplier progress = () -> true;
+
+    public void configure(BooleanSupplier enabled, DoubleSupplier duration, IntSupplier maximum, BooleanSupplier progress) {
+        this.enabled = enabled;
+        this.duration = duration;
+        this.maximum = maximum;
+        this.progress = progress;
+    }
 
     public synchronized void show(String title, String message, NotificationType type) {
+        if (!enabled.getAsBoolean()) return;
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(type, "type");
         long now = System.nanoTime();
-        notifications.removeIf(notification -> now - notification.createdAt >= LIFETIME_NANOS);
+        notifications.removeIf(notification -> now - notification.createdAt >= notification.lifetime);
         if (notifications.size() == MAX_NOTIFICATIONS) notifications.remove(0);
-        notifications.add(new Notification(title, message, type, now));
+        notifications.add(new Notification(title, message, type, now, (long) (duration.getAsDouble() * 1_000_000_000L)));
     }
 
     public void moduleState(String moduleName, boolean enabled) {
@@ -35,15 +51,27 @@ public final class NotificationManager {
                 enabled ? NotificationType.ENABLED : NotificationType.DISABLED);
     }
 
+    public synchronized void clear() {
+        notifications.clear();
+        lastFrameNanos = 0;
+    }
+
     @SubscribeEvent
     public void onOverlay(RenderGameOverlayEvent.Post event) {
-        if (event.type == RenderGameOverlayEvent.ElementType.ALL) render(event.resolution);
+        if (event.type == RenderGameOverlayEvent.ElementType.ALL && Minecraft.getMinecraft().currentScreen == null) {
+            render(event.resolution);
+        }
+    }
+
+    @SubscribeEvent
+    public void onGuiDraw(GuiScreenEvent.DrawScreenEvent.Post event) {
+        if (Minecraft.getMinecraft().theWorld != null) render(new ScaledResolution(Minecraft.getMinecraft()));
     }
 
     private synchronized void render(ScaledResolution resolution) {
         long now = System.nanoTime();
-        notifications.removeIf(notification -> now - notification.createdAt >= LIFETIME_NANOS);
-        if (notifications.isEmpty()) {
+        notifications.removeIf(notification -> now - notification.createdAt >= notification.lifetime);
+        if (notifications.isEmpty() || !enabled.getAsBoolean()) {
             lastFrameNanos = now;
             return;
         }
@@ -54,7 +82,7 @@ public final class NotificationManager {
         NotificationLayout layout = new NotificationLayout(screenWidth, screenHeight);
         double delta = lastFrameNanos == 0 ? 0 : Math.min((now - lastFrameNanos) / 1_000_000_000.0, 0.1);
         lastFrameNanos = now;
-        int visible = Math.min(notifications.size(), Math.max(1,
+        int visible = Math.min(Math.min(notifications.size(), maximum.getAsInt()), Math.max(1,
                 (int) ((screenHeight - layout.marginY * 2 + layout.gap) / (layout.height + layout.gap))));
 
         ui.begin(screenWidth, screenHeight);
@@ -63,7 +91,7 @@ public final class NotificationManager {
                 Notification notification = notifications.get(notifications.size() - 1 - slot);
                 long age = now - notification.createdAt;
                 double opacity = easeOut(age / (double) ENTER_NANOS)
-                        * easeOut((LIFETIME_NANOS - age) / (double) EXIT_NANOS);
+                        * easeOut((notification.lifetime - age) / (double) EXIT_NANOS);
                 double targetY = screenHeight - layout.marginY - layout.height
                         - slot * (layout.height + layout.gap);
                 if (Double.isNaN(notification.y)) {
@@ -74,7 +102,8 @@ public final class NotificationManager {
 
                 float x = (float) (screenWidth - layout.marginX - layout.width + layout.slide * (1 - opacity));
                 renderer.draw(notification.title, notification.message, notification.type, x, (float) notification.y,
-                        layout.width, layout.height, (float) opacity, 1 - age / (float) LIFETIME_NANOS);
+                        layout.width, layout.height, (float) opacity, 1 - age / (float) notification.lifetime,
+                        progress.getAsBoolean());
             }
         } finally {
             ui.end();
@@ -91,13 +120,15 @@ public final class NotificationManager {
         private final String message;
         private final NotificationType type;
         private final long createdAt;
+        private final long lifetime;
         private double y = Double.NaN;
 
-        private Notification(String title, String message, NotificationType type, long createdAt) {
+        private Notification(String title, String message, NotificationType type, long createdAt, long lifetime) {
             this.title = title;
             this.message = message;
             this.type = type;
             this.createdAt = createdAt;
+            this.lifetime = lifetime;
         }
     }
 }

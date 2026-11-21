@@ -88,9 +88,13 @@ public final class AcrylicRenderer {
     }
 
     public void drawSurface(float x, float y, float width, float height, float opacity) {
+        drawSurface(x, y, width, height, height * (6f / 26f), opacity);
+    }
+
+    public void drawSurface(float x, float y, float width, float height, float radius, float opacity) {
         if (opacity < 0.02f || width <= 0 || height <= 0) return;
-        float unit = height / 26f;
-        float radius = Math.min(height * (6f / 26f), width / 2);
+        radius = Math.min(radius, Math.min(width, height) / 2);
+        float unit = radius / 6f;
         roundedRect(x - unit, y + 1.5f * unit, width + 2 * unit, height + unit,
                 radius + unit, color(0x000000, 30, opacity));
         if (frostReady) {

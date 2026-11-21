@@ -16,6 +16,11 @@ final class NotificationRenderer {
 
     void draw(String title, String message, NotificationType type, float x, float y,
               float width, float height, float opacity, float remaining) {
+        draw(title, message, type, x, y, width, height, opacity, remaining, true);
+    }
+
+    void draw(String title, String message, NotificationType type, float x, float y,
+              float width, float height, float opacity, float remaining, boolean progress) {
         if (opacity < 0.02f || width <= 0 || height <= 0) return;
         int accent = type == NotificationType.ENABLED ? AcrylicRenderer.ENABLED_COLOR
                 : type == NotificationType.DISABLED ? AcrylicRenderer.DISABLED_COLOR : AcrylicRenderer.ACCENT_COLOR;
@@ -40,7 +45,7 @@ final class NotificationRenderer {
                     color(type == NotificationType.INFO ? AcrylicRenderer.MUTED_COLOR : accent, 245, opacity));
 
             float progressWidth = (contentWidth - 20) * Math.max(0, Math.min(1, remaining));
-            if (progressWidth > 0.1f) {
+            if (progress && progressWidth > 0.1f) {
                 roundedRect(10, 23, progressWidth, 0.7f,
                         Math.min(0.35f, progressWidth / 2), color(accent, 145, opacity));
             }
