@@ -8,7 +8,7 @@ import com.github.gavin.lake.module.modules.ClickGuiModule;
 import com.github.gavin.lake.module.setting.BooleanSetting;
 import com.github.gavin.lake.module.setting.NumberSetting;
 import com.github.gavin.lake.module.setting.Setting;
-import com.github.gavin.lake.render.PharosRenderer;
+import com.github.gavin.lake.render.LakeRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
@@ -25,13 +25,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import static com.github.gavin.lake.render.PharosRenderer.color;
+import static com.github.gavin.lake.render.LakeRenderer.color;
 import static com.github.gavin.lake.ui.clickgui.ClickGuiLayout.*;
 
 public final class ClickGuiScreen extends GuiScreen {
     private final ClickGuiModule owner;
     private final ModuleRegistry registry;
-    private final PharosRenderer ui = new PharosRenderer();
+    private final LakeRenderer ui = new LakeRenderer();
     private final SearchInput search = new SearchInput();
     private final Set<Module> expanded = new HashSet<>();
     private final Map<Object, Float> switches = new HashMap<>();
@@ -97,7 +97,7 @@ public final class ClickGuiScreen extends GuiScreen {
                 ui.prepareText(box.scale);
                 drawSidebar(box, localX, localY);
                 ui.text(ui.heading(), search.text().isEmpty() ? category.label() : "Search Results",
-                        box.contentX(), 13, PharosRenderer.TEXT, 1);
+                        box.contentX(), 13, LakeRenderer.TEXT, 1);
                 drawSearch(box);
                 ui.clip(box.x + box.contentX() * box.scale, box.y + CONTENT_Y * box.scale,
                         ROW_WIDTH * box.scale, (HEIGHT - CONTENT_Y) * box.scale);
@@ -114,8 +114,8 @@ public final class ClickGuiScreen extends GuiScreen {
         try {
             ui.round(0, 0, box.sidebar, HEIGHT, 6, color(0x050505, 45, 1));
             ui.round(6, 0, box.sidebar - 6, HEIGHT, 0, color(0x050505, 12, 1));
-            CategoryIcons.logo(ui, color(0xC6CACC, 255, 1));
-            if (expansion > 0) ui.text(ui.name(), "Pharos", 38, 15, PharosRenderer.TEXT, expansion);
+            LakeLogo.draw(ui, 20, 22, 13);
+            if (expansion > 0) ui.textCentered(ui.name(), "Lake", 34.5f, 22, LakeRenderer.TEXT, expansion);
             Category[] categories = Category.values();
             for (int index = 0; index < categories.length; index++) {
                 Category value = categories[index];
@@ -124,24 +124,21 @@ public final class ClickGuiScreen extends GuiScreen {
                 if (hovered) ui.round(6, y, box.sidebar - 12, 24, 3, color(0xFFFFFF, 10, 1));
                 boolean active = category == value && search.text().isEmpty();
                 if (active) ui.round(8, y + 6, 1.5f, 11, 0.7f, color(0xE4E4E7, 255, 1));
-                CategoryIcons.draw(ui, value, 12.5f, y + 5.5f, color(0xAFAEB7, 255, 1));
-                if (expansion > 0) ui.text(ui.label(), value.label(), 34.5f, y + 5, 0xC8C7CE, expansion);
+                CategoryIcons.draw(ui, value, 20, y + 12, color(0xAFAEB7, 255, 1));
+                if (expansion > 0) ui.textCentered(ui.label(), value.label(), 34.5f, y + 12, 0xC8C7CE, expansion);
             }
-            float configY = categoryY(7) + 4;
-            CategoryIcons.draw(ui, "configs", 12.5f, configY + 5.5f, color(0xAFAEB7, 255, 1));
-            if (expansion > 0) ui.text(ui.label(), "Configs", 34.5f, configY + 5, 0xC8C7CE, expansion);
         } finally { ui.unclip(); }
     }
 
     private void drawSearch(ClickGuiLayout box) {
         float x = box.contentX() + 256;
         ui.round(x, 10, 118, 20, 3, color(0x000000, search.focused ? 35 : 18, 1));
-        int white = color(PharosRenderer.TEXT, 255, 1);
+        int white = color(LakeRenderer.TEXT, 255, 1);
         ui.round(x + 8, 16, 5.1f, 5.1f, 2.55f, white);
         ui.round(x + 8.9f, 16.9f, 3.3f, 3.3f, 1.65f, color(0x252525, 255, 1));
         ui.line(x + 12.8f, 20.8f, x + 15.1f, 23.1f, 1.1f, white);
         String value = search.text();
-        if (value.isEmpty() && !search.focused) ui.text(ui.searchFont(), "Search · Ctrl+F", x + 21, 14.5f, PharosRenderer.TEXT, 1);
+        if (value.isEmpty() && !search.focused) ui.text(ui.searchFont(), "Search · Ctrl+F", x + 21, 14.5f, LakeRenderer.TEXT, 1);
         else {
             int start = 0;
             while (start < search.cursor() && ui.label().width(value.substring(start, search.cursor())) > 91) {
@@ -153,7 +150,7 @@ public final class ClickGuiScreen extends GuiScreen {
                 float right = x + 21 + ui.label().width(value.substring(start, Math.max(start, search.end())));
                 ui.round(left, 14, Math.min(x + 112, right) - left, 12, 0, color(0xFFFFFF, 35, 1));
             }
-            ui.text(ui.label(), visible, x + 21, 14, PharosRenderer.TEXT, 1);
+            ui.text(ui.label(), visible, x + 21, 14, LakeRenderer.TEXT, 1);
             if (search.focused && (System.currentTimeMillis() / 500) % 2 == 0) {
                 float caret = x + 21 + ui.label().width(value.substring(start, search.cursor()));
                 ui.round(caret, 16, 0.6f, 8, 0, white);
@@ -183,9 +180,18 @@ public final class ClickGuiScreen extends GuiScreen {
                 boolean hovered = inside(mouseX, mouseY, x, Math.max(y, CONTENT_Y), ROW_WIDTH,
                         Math.min(y + ROW_HEIGHT, HEIGHT) - Math.max(y, CONTENT_Y));
                 ui.round(x, y, ROW_WIDTH, height, 5, color(0xFFFFFF, open || hovered ? 15 : 3, 1));
-                ui.text(ui.name(), ui.name().fit(module.name(), 292), x + 11, y + 9, PharosRenderer.TEXT, 1);
-                ui.text(ui.body(), ui.body().fit(binding == module ? "Press a key" : module.description(), 320),
-                        x + 11, y + 22.5f, PharosRenderer.MUTED, 1);
+                String key = ui.body().fit(keyName(module.key()), 64);
+                float bindWidth = key.isEmpty() ? 0 : ui.body().width(key) + 10;
+                float textWidth = bindWidth == 0 ? 292 : 283 - bindWidth;
+                ui.text(ui.name(), ui.name().fit(module.name(), textWidth), x + 11, y + 9, LakeRenderer.TEXT, 1);
+                ui.text(ui.body(), ui.body().fit(binding == module ? "Press a key" : module.description(),
+                                bindWidth == 0 ? 320 : textWidth),
+                        x + 11, y + 22.5f, LakeRenderer.MUTED, 1);
+                if (bindWidth > 0) {
+                    float bindX = x + 302 - bindWidth;
+                    ui.round(bindX, y + 13, bindWidth, 14, 3, color(0xFFFFFF, 14, 1));
+                    ui.textCentered(ui.body(), key, bindX + 5, y + 20, LakeRenderer.MUTED, 1);
+                }
                 ui.chevron(x + 316, y + 20, open, color(0xC2C1C8, 255, 1));
                 ui.toggle(x + 334, y + 14, switchPosition(module, module.enabled()), 1);
                 if (open && !module.settings().isEmpty()) drawSettings(module, x, y);
@@ -200,7 +206,7 @@ public final class ClickGuiScreen extends GuiScreen {
         for (int index = 0; index < module.settings().size(); index++) {
             Setting<?> setting = module.settings().get(index);
             float top = y + 51 + index * 31.5f;
-            ui.text(ui.label(), ui.label().fit(setting.name(), 270), x + 17, top, PharosRenderer.TEXT, 1);
+            ui.text(ui.label(), ui.label().fit(setting.name(), 270), x + 17, top, LakeRenderer.TEXT, 1);
             if (setting instanceof NumberSetting) {
                 NumberSetting number = (NumberSetting) setting;
                 String value = String.format(Locale.ROOT, "%.2f%s", number.value(), number.unit());
@@ -271,6 +277,12 @@ public final class ClickGuiScreen extends GuiScreen {
             LogManager.getLogger("Lake").error("Could not toggle " + module.id(), exception);
             ClientChat.error("Could not toggle " + module.name());
         }
+    }
+
+    private static String keyName(int key) {
+        if (key == 0) return "";
+        String name = Keyboard.getKeyName(key);
+        return name == null || name.isEmpty() ? "KEY " + key : name;
     }
 
     @Override protected void mouseClickMove(int mouseX, int mouseY, int button, long duration) {

@@ -6,13 +6,22 @@
 ```text
 help (别名 commands)
 └── <command>
-test
-├── on
-└── off
+modules (别名 list)
+└── <category>
+toggle (别名 t)
+└── <module>
+module
+└── <module>
+    ├── on
+    └── off
+bind
+└── <module>
+    └── <key>
+clickgui (别名 gui)
 ```
 
-`.help` 列出注册项，`.help test` 显示指定命令及其子节点。帮助文本从节点的名称、别名、描述和执行器生成。
-`.test` 使用父节点执行器，`.test on` 和 `.test off` 使用对应子节点执行器。多余参数或未知子节点不会执行父节点。
+`.help` 列出注册项，`.help module` 显示指定命令及其子节点。帮助文本从节点的名称、别名、描述和执行器生成。
+`.modules` 列出模块，`.module <module> on/off` 设置状态，`.bind <module> <key>` 设置按键，`.gui` 打开模块菜单。
 
 新增命令示例（在注册入口调用处理器的 `register` 方法）：
 

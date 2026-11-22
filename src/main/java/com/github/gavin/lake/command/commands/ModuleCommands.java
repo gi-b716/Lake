@@ -55,7 +55,7 @@ public final class ModuleCommands {
                             ClientChat.info("Bound " + target.name() + " to " + (key == 0 ? "NONE" : Keyboard.getKeyName(key)) + ".");
                         }))));
 
-        dispatcher.register(literal("clickgui").aliases("gui").description("Open the acrylic module menu")
+        dispatcher.register(literal("clickgui").aliases("gui").description("Open the module menu")
                 .executes(context -> {
                     modules.get(ClickGuiModule.class).setEnabled(true);
                     ClientChat.info("ClickGUI opened.");

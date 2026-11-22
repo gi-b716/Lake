@@ -44,6 +44,15 @@ public final class UIFont {
 
     public float height() { return face.getLineMetrics("Hg", CONTEXT).getHeight() / 2; }
 
+    public void drawCentered(String value, float x, float centerY, int color) {
+        String text = clean(value);
+        if (text.isEmpty()) return;
+        TextLayout line = layout(text);
+        java.awt.geom.Rectangle2D ink = line.getBounds();
+        float offset = (float) (line.getAscent() + ink.getCenterY()) / 2;
+        draw(text, x, centerY - offset, color);
+    }
+
     public String fit(String value, float maxWidth) {
         String text = clean(value);
         if (width(text) <= maxWidth) return text;
@@ -87,7 +96,7 @@ public final class UIFont {
         GlStateManager.enableTexture2D();
         GlStateManager.disableAlpha();
         GlStateManager.bindTexture(image.texture.getGlTextureId());
-        PharosRenderer.quad(x - 1, y - 1, image.width, image.height, color);
+        LakeRenderer.quad(x - 1, y - 1, image.width, image.height, color);
     }
 
     public void release() {

@@ -1,6 +1,6 @@
 package com.github.gavin.lake.notification;
 
-import com.github.gavin.lake.render.PharosRenderer;
+import com.github.gavin.lake.render.LakeRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraftforge.client.event.GuiScreenEvent;
@@ -18,7 +18,7 @@ import java.util.function.IntSupplier;
 
 public final class NotificationManager {
     private final Deque<Toast> queue = new ArrayDeque<>();
-    private final PharosRenderer ui = new PharosRenderer();
+    private final LakeRenderer ui = new LakeRenderer();
     private final NotificationRenderer renderer = new NotificationRenderer(ui);
     private BooleanSupplier enabled = () -> true;
     private DoubleSupplier duration = () -> 3.4;
@@ -66,7 +66,7 @@ public final class NotificationManager {
         if (queue.isEmpty() || !enabled.getAsBoolean()) { lastFrame = now; return; }
         double width = resolution.getScaledWidth_double(), height = resolution.getScaledHeight_double();
         if (width <= 0 || height <= 0) return;
-        NotificationLayout spacing = new NotificationLayout(width, height, 56);
+        NotificationLayout spacing = new NotificationLayout(width, height, 43);
         float delta = lastFrame == 0 ? 0 : Math.min(0.1f, (now - lastFrame) / 1_000_000_000f);
         lastFrame = now;
         int capacity = Math.max(1, (int) ((height - 2 * spacing.margin + spacing.gap) / (spacing.height + spacing.gap)));

@@ -58,7 +58,7 @@ final class LiquidBackground {
                 GL20.glUseProgram(downsample.id);
                 GL20.glUniform1i(downsample.uniform("scene"), 0);
                 GL20.glUniform2f(downsample.uniform("footprint"), 1f / reducedWidth, 1f / reducedHeight);
-                PharosRenderer.quad(0, 0, 1, 1, 0xFFFFFFFF);
+                LakeRenderer.quad(0, 0, 1, 1, 0xFFFFFFFF);
                 GL20.glUseProgram(blur.id);
                 GL20.glUniform1i(blur.uniform("scene"), 0);
                 for (int pass = 0; pass < 2; pass++) {
@@ -66,7 +66,7 @@ final class LiquidBackground {
                     GlStateManager.bindTexture(textures[pass]);
                     GL20.glUniform2f(blur.uniform("stepSize"), pass == 0 ? 1f / reducedWidth : 0,
                             pass == 1 ? 1f / reducedHeight : 0);
-                    PharosRenderer.quad(0, 0, 1, 1, 0xFFFFFFFF);
+                    LakeRenderer.quad(0, 0, 1, 1, 0xFFFFFFFF);
                 }
             } finally {
                 GL11.glMatrixMode(GL11.GL_MODELVIEW);
@@ -104,7 +104,7 @@ final class LiquidBackground {
         GL20.glUniform1f(surface.uniform("opacity"), opacity);
         GL20.glUniform1f(surface.uniform("transmission"), transmission);
         GL20.glUniform1f(surface.uniform("refraction"), lens * pixelScale);
-        PharosRenderer.quad(x, y, panelWidth, panelHeight, 0xFFFFFFFF);
+        LakeRenderer.quad(x, y, panelWidth, panelHeight, 0xFFFFFFFF);
         GL20.glUseProgram(0);
     }
 

@@ -15,13 +15,14 @@ import org.lwjgl.opengl.GLContext;
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.io.InputStream;
+import java.awt.image.BufferedImage;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Fixed monochrome drawing vocabulary measured from the supplied Pharos screenshots. */
-public final class PharosRenderer {
+/** Shared drawing primitives for Lake's monochrome interface. */
+public final class LakeRenderer {
     public static final int TEXT = 0xF5F5F5;
     public static final int MUTED = 0xAEADB3;
     public static final int ENABLED = 0x80FFE7;
@@ -31,10 +32,10 @@ public final class PharosRenderer {
     private final UIFont body = new UIFont("Regular", 7.25f);
     private final UIFont searchFont = new UIFont("Regular", 8.5f);
     private final UIFont label = new UIFont("Regular", 9.0f);
-    private final UIFont toastTitle = new UIFont("Bold", 16);
-    private final UIFont toastMessage = new UIFont("Medium", 13.2f);
+    private final UIFont toastTitle = new UIFont("Bold", 10.5f);
+    private final UIFont toastMessage = new UIFont("Medium", 9.0f);
     private final LiquidBackground liquid = new LiquidBackground();
-    private final Map<String, DynamicTexture> icons = new HashMap<>();
+    private final Map<String, IconImage> icons = new HashMap<>();
     private final IntBuffer viewport = BufferUtils.createIntBuffer(16);
     private final IntBuffer clip = BufferUtils.createIntBuffer(16);
     private final FloatBuffer previousColor = BufferUtils.createFloatBuffer(16);
@@ -123,7 +124,7 @@ public final class PharosRenderer {
         drawShadow(x, y, width, height, radius, opacity, notification);
         if (liquidReady) {
             liquid.draw(x, y, width, height, radius, opacity, notification ? 0.40f : 0.22f,
-                    notification ? 9 : 3, viewport.get(0), viewport.get(1), pixelScale);
+                    notification ? 6 : 3, viewport.get(0), viewport.get(1), pixelScale);
         } else round(x, y, width, height, radius, color(0x171717, 246, opacity));
     }
 
@@ -171,7 +172,7 @@ public final class PharosRenderer {
     private void drawShadow(float x, float y, float width, float height, float radius, float opacity, boolean notification) {
         if (!GLContext.getCapabilities().OpenGL20) return;
         if (shadow == null) shadow = new ShaderProgram("shadow.frag");
-        float sigma = notification ? 4.5f : 2f;
+        float sigma = notification ? 3f : 2f;
         float padding = sigma * 3;
         GlStateManager.disableTexture2D();
         GlStateManager.disableAlpha();
@@ -181,7 +182,7 @@ public final class PharosRenderer {
         GL20.glUniform1f(shadow.uniform("padding"), padding);
         GL20.glUniform1f(shadow.uniform("sigma"), sigma);
         quad(x - padding, y - padding + 1, width + padding * 2, height + padding * 2,
-                color(0x000000, notification ? 80 : 45, opacity));
+                color(0x000000, notification ? 65 : 45, opacity));
         GL20.glUseProgram(0);
     }
 
@@ -189,19 +190,37 @@ public final class PharosRenderer {
         font.draw(value, x, y, color(rgb, 255, opacity));
     }
 
+    public void textCentered(UIFont font, String value, float x, float centerY, int rgb, float opacity) {
+        font.drawCentered(value, x, centerY, color(rgb, 255, opacity));
+    }
+
     public void icon(String name, float x, float y, float size, int color) {
-        DynamicTexture image = icons.get(name);
+        drawIcon(iconImage(name), x, y, size, color);
+    }
+
+    public void iconCentered(String name, float centerX, float centerY, float size, int color) {
+        IconImage image = iconImage(name);
+        drawIcon(image, centerX - image.centerX * size, centerY - image.centerY * size, size, color);
+    }
+
+    private IconImage iconImage(String name) {
+        IconImage image = icons.get(name);
         if (image == null) {
             try (InputStream stream = getClass().getResourceAsStream("/assets/lake/icons/" + name + ".png")) {
                 if (stream == null) throw new IOException("Missing icon: " + name);
-                image = new DynamicTexture(ImageIO.read(stream));
-                image.setBlurMipmap(true, false);
+                BufferedImage bitmap = ImageIO.read(stream);
+                if (bitmap == null) throw new IOException("Invalid icon: " + name);
+                image = new IconImage(bitmap);
                 icons.put(name, image);
             } catch (IOException exception) { throw new IllegalStateException(exception); }
         }
+        return image;
+    }
+
+    private void drawIcon(IconImage image, float x, float y, float size, int color) {
         GlStateManager.enableTexture2D();
         GlStateManager.disableAlpha();
-        GlStateManager.bindTexture(image.getGlTextureId());
+        GlStateManager.bindTexture(image.texture.getGlTextureId());
         quad(x, y, size, size, color);
     }
 
@@ -258,7 +277,7 @@ public final class PharosRenderer {
         if (iconGlow != null) iconGlow.delete();
         shape = shadow = iconGlow = null;
         for (UIFont font : new UIFont[]{heading, name, body, searchFont, label, toastTitle, toastMessage}) font.release();
-        for (DynamicTexture image : icons.values()) image.deleteGlTexture();
+        for (IconImage image : icons.values()) image.texture.deleteGlTexture();
         icons.clear();
     }
 
@@ -278,5 +297,25 @@ public final class PharosRenderer {
 
     private static void vertex(WorldRenderer vertices, float x, float y, float u, float v, int color) {
         vertices.pos(x, y, 0).tex(u, v).color(color >> 16 & 255, color >> 8 & 255, color & 255, color >>> 24).endVertex();
+    }
+
+    private static final class IconImage {
+        final DynamicTexture texture;
+        final float centerX, centerY;
+
+        IconImage(BufferedImage bitmap) {
+            int left = bitmap.getWidth(), top = bitmap.getHeight(), right = -1, bottom = -1;
+            for (int y = 0; y < bitmap.getHeight(); y++) {
+                for (int x = 0; x < bitmap.getWidth(); x++) {
+                    if ((bitmap.getRGB(x, y) >>> 24) < 32) continue;
+                    left = Math.min(left, x); right = Math.max(right, x);
+                    top = Math.min(top, y); bottom = Math.max(bottom, y);
+                }
+            }
+            centerX = right < left ? 0.5f : (left + right + 1f) / (2 * bitmap.getWidth());
+            centerY = bottom < top ? 0.5f : (top + bottom + 1f) / (2 * bitmap.getHeight());
+            texture = new DynamicTexture(bitmap);
+            texture.setBlurMipmap(true, false);
+        }
     }
 }
