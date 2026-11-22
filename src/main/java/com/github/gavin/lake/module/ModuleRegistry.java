@@ -45,6 +45,7 @@ public final class ModuleRegistry {
         for (Module module : new ArrayList<>(modules)) if (module.key() == key) module.toggle();
     }
 
+    public void preTick() { for (Module module : new ArrayList<>(modules)) module.preTick(); }
     public void tick() { for (Module module : new ArrayList<>(modules)) module.tick(); }
     public void start() {
         started = true;

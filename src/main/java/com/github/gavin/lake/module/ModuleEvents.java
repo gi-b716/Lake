@@ -39,7 +39,15 @@ public final class ModuleEvents {
 
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
+        if (event.phase == TickEvent.Phase.START) {
+            for (Module module : registry.modules()) {
+                try { module.preTick(); } catch (RuntimeException exception) {
+                    try { module.setEnabled(false); } catch (RuntimeException ignored) {}
+                    failed(module, exception);
+                }
+            }
+            return;
+        }
         if (Minecraft.getMinecraft().theWorld != null) {
             for (Module module : registry.modules()) {
                 try { module.tick(); } catch (RuntimeException exception) {

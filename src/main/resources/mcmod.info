@@ -14,5 +14,25 @@
     "logoFile": "",
     "screenshots": [],
     "dependencies": []
+  },
+  {
+    "modid": "viaforge",
+    "name": "ViaForge",
+    "description": "Client-side protocol translation bundled with Lake.",
+    "version": "${viaforgeVersion}",
+    "mcversion": "1.8.9",
+    "url": "https://github.com/ViaVersion/ViaForge",
+    "authorList": ["FlorianMichael/EnZaXD"],
+    "credits": "ViaVersion and contributors"
+  },
+  {
+    "modid": "ias",
+    "name": "In-Game Account Switcher",
+    "description": "Microsoft account login and switching bundled with Lake.",
+    "version": "${accountManagerVersion}",
+    "mcversion": "1.8.9",
+    "url": "https://github.com/The-Fireplace-Minecraft-Mods/In-Game-Account-Switcher",
+    "authorList": ["The_Fireplace", "The_BrainStone", "VidTu"],
+    "logoFile": "iaslogo.png"
   }
 ]

@@ -15,6 +15,8 @@ val mcVersion: String by project
 val version: String by project
 val mixinGroup = "$baseGroup.mixin"
 val modid: String by project
+val viaForgeVersion = "4.3.2"
+val accountManagerVersion = "8.0.1-forge1.8"
 val transformerFile = file("src/main/resources/accesstransformer.cfg")
 
 // Toolchains:
@@ -27,9 +29,8 @@ loom {
     log4jConfigs.from(file("log4j2.xml"))
     launchConfigs {
         "client" {
-            // If you don't want mixins, remove these lines
-            property("mixin.debug", "true")
-            arg("--tweakClass", "org.spongepowered.asm.launch.MixinTweaker")
+            // ViaForge's core loader starts Mixin after Forge has configured its class loader.
+            property("fml.coreMods.load", "$baseGroup.init.LakeMixinLoader")
         }
     }
     runConfigs {
@@ -45,6 +46,7 @@ loom {
         pack200Provider.set(dev.architectury.pack200.java.Pack200Adapter())
         // If you don't want mixins, remove this lines
         mixinConfig("mixins.$modid.json")
+        mixinConfig("mixins.viaforge.json")
 	    if (transformerFile.exists()) {
 			println("Installing access transformer")
 		    accessTransformer(transformerFile)
@@ -65,6 +67,9 @@ sourceSets.main {
 repositories {
     mavenCentral()
     maven("https://repo.spongepowered.org/maven/")
+    maven("https://api.modrinth.com/maven") {
+        content { includeGroup("maven.modrinth") }
+    }
     // If you don't want to log in with your real minecraft account, remove this line
     maven("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1")
 }
@@ -73,10 +78,23 @@ val shadowImpl: Configuration by configurations.creating {
     configurations.implementation.get().extendsFrom(this)
 }
 
+// Keep the release mod out of the development classpath: Loom supplies its remapped copy there.
+val bundledMods: Configuration by configurations.creating {
+    isTransitive = false
+}
+
 dependencies {
     minecraft("com.mojang:minecraft:1.8.9")
     mappings("de.oceanlabs.mcp:mcp_stable:22-1.8.9")
     forge("net.minecraftforge:forge:1.8.9-11.15.1.2318-1.8.9")
+    add("modImplementation", "maven.modrinth:viaforge:$viaForgeVersion+1.8.9") {
+        isTransitive = false
+    }
+    bundledMods("maven.modrinth:viaforge:$viaForgeVersion+1.8.9")
+    add("modImplementation", "maven.modrinth:in-game-account-switcher:$accountManagerVersion") {
+        isTransitive = false
+    }
+    bundledMods("maven.modrinth:in-game-account-switcher:$accountManagerVersion")
 
     // If you don't want mixins, remove these lines
     shadowImpl("org.spongepowered:mixin:0.7.11-SNAPSHOT") {
@@ -95,6 +113,11 @@ tasks.withType(JavaCompile::class) {
     options.encoding = "UTF-8"
 }
 
+// ViaForge carries an older Mixin copy; use Lake's Mixin first for Gradle Java launches.
+tasks.withType(JavaExec::class).configureEach {
+    classpath = files(shadowImpl, classpath)
+}
+
 tasks.withType(org.gradle.jvm.tasks.Jar::class) {
     archiveBaseName.set(modid)
     manifest.attributes.run {
@@ -103,7 +126,8 @@ tasks.withType(org.gradle.jvm.tasks.Jar::class) {
 
         // If you don't want mixins, remove these lines
         this["TweakClass"] = "org.spongepowered.asm.launch.MixinTweaker"
-        this["MixinConfigs"] = "mixins.$modid.json"
+        this["MixinConfigs"] = "mixins.$modid.json,mixins.viaforge.json"
+        this["FMLCorePlugin"] = "$baseGroup.init.LakeMixinLoader"
 	    if (transformerFile.exists())
 			this["FMLAT"] = "${modid}_at.cfg"
     }
@@ -114,6 +138,8 @@ tasks.processResources {
     inputs.property("mcversion", mcVersion)
     inputs.property("modid", modid)
     inputs.property("basePackage", baseGroup)
+    inputs.property("viaforgeVersion", viaForgeVersion)
+    inputs.property("accountManagerVersion", accountManagerVersion.substringBefore("-"))
 
     filesMatching(listOf("mcmod.info", "mixins.$modid.json")) {
         expand(inputs.properties)
@@ -137,7 +163,13 @@ tasks.jar {
 tasks.shadowJar {
     destinationDirectory.set(layout.buildDirectory.dir("intermediates"))
     archiveClassifier.set("non-obfuscated-with-deps")
-    configurations = listOf(shadowImpl)
+    configurations = listOf(shadowImpl, bundledMods)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "module-info.class", "META-INF/versions/**")
+    filesMatching("META-INF/services/**") {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    mergeServiceFiles()
     doLast {
         configurations.forEach {
             println("Copying dependencies into mod: ${it.files}")

@@ -83,9 +83,11 @@ public abstract class Module {
         }
     }
 
+    public final void preTick() { if (initialized && enabled) onPreTick(); }
     public final void tick() { if (initialized && enabled) onTick(); }
     protected void onEnable() {}
     protected void onDisable() {}
+    protected void onPreTick() {}
     protected void onTick() {}
 
     void attach(Listener listener) {
