@@ -1,56 +1,52 @@
 package com.github.gavin.lake.notification;
 
-import com.github.gavin.lake.render.AcrylicRenderer;
-import com.github.gavin.lake.render.UIFont;
+import com.github.gavin.lake.render.PharosRenderer;
 import net.minecraft.client.renderer.GlStateManager;
 
-import static com.github.gavin.lake.render.AcrylicRenderer.color;
-import static com.github.gavin.lake.render.AcrylicRenderer.roundedRect;
+import static com.github.gavin.lake.render.PharosRenderer.color;
 
 final class NotificationRenderer {
-    private final AcrylicRenderer ui;
+    private final PharosRenderer ui;
 
-    NotificationRenderer(AcrylicRenderer ui) {
-        this.ui = ui;
+    NotificationRenderer(PharosRenderer ui) { this.ui = ui; }
+
+    float naturalWidth(String title, String message) {
+        return Math.max(ui.toastTitle().width(title), ui.toastMessage().width(message)) + 55;
     }
 
     void draw(String title, String message, NotificationType type, float x, float y,
-              float width, float height, float opacity, float remaining) {
-        draw(title, message, type, x, y, width, height, opacity, remaining, true);
-    }
-
-    void draw(String title, String message, NotificationType type, float x, float y,
-              float width, float height, float opacity, float remaining, boolean progress) {
-        if (opacity < 0.02f || width <= 0 || height <= 0) return;
-        int accent = type == NotificationType.ENABLED ? AcrylicRenderer.ENABLED_COLOR
-                : type == NotificationType.DISABLED ? AcrylicRenderer.DISABLED_COLOR : AcrylicRenderer.ACCENT_COLOR;
-        ui.drawSurface(x, y, width, height, opacity);
-
-        // Reference coordinates scale uniformly to the viewport-relative height.
-        float scale = height / 26f;
-        float contentWidth = width / scale;
-        ui.prepareText(scale);
+              NotificationLayout layout, float opacity, float remaining) {
+        if (opacity <= 0.001f) return;
+        ui.surface(x, y, layout.width, layout.height, 17 * layout.scale, opacity, true);
+        ui.prepareText(layout.scale);
         GlStateManager.pushMatrix();
         try {
             GlStateManager.translate(x, y, 0);
-            GlStateManager.scale(scale, scale, 1);
-            UIFont titleFont = ui.titleFont();
-            UIFont messageFont = ui.bodyFont();
-            String fittedTitle = titleFont.fit(title, Math.max(1, contentWidth - 48));
-            float messageX = 10 + titleFont.width(fittedTitle) + 6;
-            String fittedMessage = messageFont.fit(message, Math.max(1, contentWidth - 10 - messageX));
-            titleFont.draw(fittedTitle, 10, (26 - titleFont.height()) / 2,
-                    color(AcrylicRenderer.TEXT_COLOR, 255, opacity));
-            messageFont.draw(fittedMessage, messageX, (26 - messageFont.height()) / 2,
-                    color(type == NotificationType.INFO ? AcrylicRenderer.MUTED_COLOR : accent, 245, opacity));
-
-            float progressWidth = (contentWidth - 20) * Math.max(0, Math.min(1, remaining));
-            if (progress && progressWidth > 0.1f) {
-                roundedRect(10, 23, progressWidth, 0.7f,
-                        Math.min(0.35f, progressWidth / 2), color(accent, 145, opacity));
+            GlStateManager.scale(layout.scale, layout.scale, 1);
+            float contentWidth = layout.width / layout.scale;
+            float textWidth = Math.max(1, contentWidth - 55 + 0.01f);
+            float trackWidth = Math.max(0, contentWidth - 52);
+            int accent = type == NotificationType.ENABLED ? PharosRenderer.ENABLED : PharosRenderer.DISABLED;
+            drawIcon(type, accent, opacity);
+            ui.text(ui.toastTitle(), ui.toastTitle().fit(title, textWidth), 45, 11, PharosRenderer.TEXT, opacity);
+            ui.text(ui.toastMessage(), ui.toastMessage().fit(message, textWidth), 45, 30, 0xC0BCB5, opacity);
+            ui.round(45, 51, trackWidth, 2.3f, 1.15f, color(0xFFFFFF, 28, opacity));
+            float fill = trackWidth * Math.max(0, Math.min(1, remaining));
+            if (fill > 0) {
+                // The reference bar has a soft end glow and a solid colored core.
+                ui.round(45, 50.4f, fill, 3.5f, 1.75f, color(accent, 36, opacity));
+                ui.progress(45, 51, fill, 2.3f, color(accent, 255, opacity));
             }
-        } finally {
-            GlStateManager.popMatrix();
+        } finally { GlStateManager.popMatrix(); }
+    }
+
+    private void drawIcon(NotificationType type, int accent, float opacity) {
+        if (type == NotificationType.DISABLED) {
+            ui.glow(22.5f, 33, 14.12f, 2.81f, 6.48f, 0.157f, 0.295f, color(accent, 255, opacity));
+            ui.icon("warning", 10.5f, 20, 24, color(0xFFFFFF, 255, opacity));
+        } else {
+            ui.glow(22.5f, 33, 14.45f, 3.55f, 4.24f, 0.293f, 0.8f, color(accent, 255, opacity));
+            ui.icon("enabled-notification", 10.5f, 21, 24, color(0xFFFFFF, 255, opacity));
         }
     }
 }

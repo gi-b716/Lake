@@ -152,3 +152,24 @@ tasks.shadowJar {
 
 tasks.assemble.get().dependsOn(tasks.remapJar)
 
+// Optional off-screen OpenGL preview; exercises the actual 1.8.9 renderer without launching a world.
+val uiPreviewSource = sourceSets.create("uiPreview") {
+    compileClasspath += sourceSets.main.get().output + sourceSets.main.get().compileClasspath
+    runtimeClasspath += output + compileClasspath + sourceSets.main.get().runtimeClasspath
+}
+tasks.named<JavaCompile>(uiPreviewSource.compileJavaTaskName) {
+    dependsOn(tasks.classes)
+    options.compilerArgs.add("-proc:none")
+}
+tasks.register<JavaExec>("uiPreview") {
+    dependsOn(tasks.named(uiPreviewSource.classesTaskName))
+    classpath = uiPreviewSource.runtimeClasspath
+    mainClass.set("com.github.gavin.lake.ui.clickgui.PharosPreview")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(8)) })
+    workingDir(layout.buildDirectory.dir("ui-preview").get().asFile)
+    doFirst { workingDir.mkdirs() }
+    systemProperty("java.awt.headless", "true")
+    systemProperty("org.lwjgl.librarypath", "${System.getProperty("user.home")}/.gradle/caches/essential-loom/$mcVersion/natives")
+    args(layout.buildDirectory.dir("ui-preview").get().asFile.absolutePath)
+}
+

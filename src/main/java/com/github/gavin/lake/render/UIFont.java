@@ -1,152 +1,120 @@
 package com.github.gavin.lake.render;
 
 import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.WorldRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import org.lwjgl.opengl.GL11;
 
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
-import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.font.FontRenderContext;
-import java.awt.font.LineMetrics;
+import java.awt.font.TextAttribute;
+import java.awt.font.TextLayout;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.InputStream;
+import java.text.AttributedString;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Locale;
 
-/** Antialiased UI text, rasterized at twice its display size. */
+/** Bundled Latin typeface and platform glyph fallback, rasterized at physical display scale. */
 public final class UIFont {
     private static final FontRenderContext CONTEXT = new FontRenderContext(new AffineTransform(), true, true);
-    private static final int CACHE_LIMIT = 64;
-    private static final float SCALE = 2;
-    private static final String FONT_FAMILY = chooseFont();
-    private int rasterMultiplier = 1;
-    private final Font font;
-    private final LineMetrics metrics;
-    private final Map<String, TextTexture> cache = new LinkedHashMap<>(16, 0.75f, true);
+    private static final int CACHE_LIMIT = 128;
+    private final Font face;
+    private final Font fallback;
+    private final Map<String, TextImage> images = new LinkedHashMap<>(16, 0.75f, true);
+    private int multiplier = 1;
 
-    UIFont(int style) {
-        font = new Font(FONT_FAMILY, style, 18);
-        metrics = font.getLineMetrics("Lake", CONTEXT);
+    UIFont(String weight, float size) {
+        try (InputStream input = getClass().getResourceAsStream("/assets/lake/fonts/LakeUISans-" + weight + ".ttf")) {
+            if (input == null) throw new IllegalStateException("Missing bundled UI font");
+            face = Font.createFont(Font.TRUETYPE_FONT, input).deriveFont(size * 2);
+            fallback = new Font("Dialog", weight.equals("Bold") ? Font.BOLD : Font.PLAIN, 1).deriveFont(size * 2);
+        } catch (Exception exception) { throw new IllegalStateException("Could not load UI font", exception); }
     }
 
-    void pixelScale(float pixelsPerUnit) {
-        rasterMultiplier = Math.max(1, Math.min(8, (int) Math.ceil(pixelsPerUnit / SCALE)));
+    void pixelScale(float scale) { multiplier = Math.max(1, Math.min(8, (int) Math.ceil(scale / 2))); }
+
+    public float width(String value) {
+        String text = clean(value);
+        return text.isEmpty() ? 0 : layout(text).getAdvance() / 2;
     }
 
-    public float width(String text) {
-        return (float) font.getStringBounds(clean(text), CONTEXT).getWidth() / SCALE;
-    }
+    public float height() { return face.getLineMetrics("Hg", CONTEXT).getHeight() / 2; }
 
-    public float height() {
-        return metrics.getHeight() / SCALE;
-    }
-
-    public String fit(String text, float maxWidth) {
-        String value = clean(text);
-        if (width(value) <= maxWidth) return value;
-        String ellipsis = "…";
-        if (width(ellipsis) > maxWidth) return "";
-        int low = 0;
-        int high = value.codePointCount(0, value.length());
+    public String fit(String value, float maxWidth) {
+        String text = clean(value);
+        if (width(text) <= maxWidth) return text;
+        if (width("…") > maxWidth) return "";
+        int low = 0, high = text.codePointCount(0, text.length());
         while (low < high) {
-            int middle = (low + high + 1) / 2;
-            String candidate = value.substring(0, value.offsetByCodePoints(0, middle));
-            if (width(candidate + ellipsis) <= maxWidth) low = middle; else high = middle - 1;
+            int mid = (low + high + 1) / 2;
+            if (width(text.substring(0, text.offsetByCodePoints(0, mid)) + "…") <= maxWidth) low = mid;
+            else high = mid - 1;
         }
-        return value.substring(0, value.offsetByCodePoints(0, low)) + ellipsis;
+        return text.substring(0, text.offsetByCodePoints(0, low)) + "…";
     }
 
-    public void draw(String text, float x, float y, int color) {
-        String value = clean(text);
-        if (value.isEmpty() || (color >>> 24) == 0) return;
-        String key = rasterMultiplier + ":" + value;
-        TextTexture texture = cache.get(key);
-        if (texture == null) {
-            texture = rasterize(value);
-            cache.put(key, texture);
-            if (cache.size() > CACHE_LIMIT) {
-                Iterator<TextTexture> oldest = cache.values().iterator();
-                oldest.next().texture.deleteGlTexture();
-                oldest.remove();
+    public void draw(String value, float x, float y, int color) {
+        String text = clean(value);
+        if (text.isEmpty() || (color >>> 24) == 0) return;
+        String key = multiplier + ":" + text;
+        TextImage image = images.get(key);
+        if (image == null) {
+            TextLayout layout = layout(text);
+            int width = ((int) Math.ceil(layout.getAdvance()) + 4) * multiplier;
+            int height = ((int) Math.ceil(layout.getAscent() + layout.getDescent() + layout.getLeading()) + 4) * multiplier;
+            BufferedImage bitmap = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D graphics = bitmap.createGraphics();
+            try {
+                graphics.scale(multiplier, multiplier);
+                graphics.setColor(Color.WHITE);
+                graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                graphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+                layout.draw(graphics, 2, 2 + layout.getAscent());
+            } finally { graphics.dispose(); }
+            DynamicTexture texture = new DynamicTexture(bitmap);
+            texture.setBlurMipmap(true, false);
+            image = new TextImage(texture, width / (2f * multiplier), height / (2f * multiplier));
+            images.put(key, image);
+            if (images.size() > CACHE_LIMIT) {
+                Iterator<TextImage> oldest = images.values().iterator();
+                oldest.next().texture.deleteGlTexture(); oldest.remove();
             }
         }
-
         GlStateManager.enableTexture2D();
         GlStateManager.disableAlpha();
-        GlStateManager.bindTexture(texture.texture.getGlTextureId());
-        float left = x - 1;
-        float top = y - 1;
-        float right = left + texture.width / texture.scale;
-        float bottom = top + texture.height / texture.scale;
-        Tessellator tessellator = Tessellator.getInstance();
-        WorldRenderer vertices = tessellator.getWorldRenderer();
-        vertices.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX_COLOR);
-        vertex(vertices, left, bottom, 0, 1, color);
-        vertex(vertices, right, bottom, 1, 1, color);
-        vertex(vertices, right, top, 1, 0, color);
-        vertex(vertices, left, top, 0, 0, color);
-        tessellator.draw();
+        GlStateManager.bindTexture(image.texture.getGlTextureId());
+        PharosRenderer.quad(x - 1, y - 1, image.width, image.height, color);
     }
 
-    private TextTexture rasterize(String text) {
-        int width = ((int) Math.ceil(font.getStringBounds(text, CONTEXT).getWidth()) + 4) * rasterMultiplier;
-        int height = ((int) Math.ceil(metrics.getHeight()) + 4) * rasterMultiplier;
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D graphics = image.createGraphics();
-        try {
-            graphics.scale(rasterMultiplier, rasterMultiplier);
-            graphics.setFont(font);
-            graphics.setColor(Color.WHITE);
-            graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            graphics.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
-            graphics.drawString(text, 2, 2 + metrics.getAscent());
-        } finally {
-            graphics.dispose();
+    public void release() {
+        for (TextImage image : images.values()) image.texture.deleteGlTexture();
+        images.clear();
+    }
+
+    private TextLayout layout(String text) {
+        AttributedString attributed = new AttributedString(text);
+        attributed.addAttribute(TextAttribute.FONT, face);
+        for (int index = 0; index < text.length();) {
+            int point = text.codePointAt(index), end = index + Character.charCount(point);
+            if (!face.canDisplay(point)) attributed.addAttribute(TextAttribute.FONT, fallback, index, end);
+            index = end;
         }
-        DynamicTexture texture = new DynamicTexture(image);
-        texture.setBlurMipmap(true, false);
-        return new TextTexture(texture, width, height, SCALE * rasterMultiplier);
+        return new TextLayout(attributed.getIterator(), CONTEXT);
     }
 
-    private static String clean(String text) {
-        return text.replaceAll("(?i)§[0-9A-FK-OR]", "").replace('\n', ' ').replace('\r', ' ');
+    private static String clean(String value) {
+        return value.replaceAll("(?i)§[0-9A-FK-OR]", "").replace('\n', ' ').replace('\r', ' ');
     }
 
-    private static String chooseFont() {
-        String[] installed = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames(Locale.ENGLISH);
-        String[] preferred = {"Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC"};
-        for (String candidate : preferred) {
-            for (String family : installed) {
-                if (family.equalsIgnoreCase(candidate)) return family;
-            }
-        }
-        return "Dialog";
-    }
-
-    private static void vertex(WorldRenderer vertices, float x, float y, float u, float v, int color) {
-        vertices.pos(x, y, 0).tex(u, v).color((color >> 16) & 255, (color >> 8) & 255,
-                color & 255, (color >>> 24) & 255).endVertex();
-    }
-
-    private static final class TextTexture {
-        private final DynamicTexture texture;
-        private final int width;
-        private final int height;
-        private final float scale;
-
-        private TextTexture(DynamicTexture texture, int width, int height, float scale) {
-            this.texture = texture;
-            this.width = width;
-            this.height = height;
-            this.scale = scale;
+    private static final class TextImage {
+        final DynamicTexture texture;
+        final float width, height;
+        TextImage(DynamicTexture texture, float width, float height) {
+            this.texture = texture; this.width = width; this.height = height;
         }
     }
 }

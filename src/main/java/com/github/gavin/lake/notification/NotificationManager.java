@@ -1,13 +1,15 @@
 package com.github.gavin.lake.notification;
 
-import com.github.gavin.lake.render.AcrylicRenderer;
+import com.github.gavin.lake.render.PharosRenderer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraftforge.client.event.GuiScreenEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.client.event.GuiScreenEvent;
-import net.minecraft.client.Minecraft;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
@@ -15,120 +17,91 @@ import java.util.function.DoubleSupplier;
 import java.util.function.IntSupplier;
 
 public final class NotificationManager {
-    private static final int MAX_NOTIFICATIONS = 8;
-    private static final long ENTER_NANOS = 220_000_000L;
-    private static final long EXIT_NANOS = 260_000_000L;
-
-    private final List<Notification> notifications = new ArrayList<>();
-    private final AcrylicRenderer ui = new AcrylicRenderer();
+    private final Deque<Toast> queue = new ArrayDeque<>();
+    private final PharosRenderer ui = new PharosRenderer();
     private final NotificationRenderer renderer = new NotificationRenderer(ui);
-    private long lastFrameNanos;
     private BooleanSupplier enabled = () -> true;
     private DoubleSupplier duration = () -> 3.4;
     private IntSupplier maximum = () -> 4;
-    private BooleanSupplier progress = () -> true;
+    private long lastFrame;
 
-    public void configure(BooleanSupplier enabled, DoubleSupplier duration, IntSupplier maximum, BooleanSupplier progress) {
-        this.enabled = enabled;
-        this.duration = duration;
-        this.maximum = maximum;
-        this.progress = progress;
+    public void configure(BooleanSupplier enabled, DoubleSupplier duration, IntSupplier maximum) {
+        this.enabled = Objects.requireNonNull(enabled);
+        this.duration = Objects.requireNonNull(duration);
+        this.maximum = Objects.requireNonNull(maximum);
     }
 
     public synchronized void show(String title, String message, NotificationType type) {
         if (!enabled.getAsBoolean()) return;
-        Objects.requireNonNull(title, "title");
-        Objects.requireNonNull(message, "message");
-        Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(title); Objects.requireNonNull(message); Objects.requireNonNull(type);
         long now = System.nanoTime();
-        notifications.removeIf(notification -> now - notification.createdAt >= notification.lifetime);
-        if (notifications.size() == MAX_NOTIFICATIONS) notifications.remove(0);
-        notifications.add(new Notification(title, message, type, now, (long) (duration.getAsDouble() * 1_000_000_000L)));
+        queue.removeIf(toast -> now >= toast.expires);
+        while (queue.size() >= 8) queue.removeFirst();
+        double seconds = duration.getAsDouble();
+        if (!Double.isFinite(seconds)) seconds = 3.4;
+        queue.addLast(new Toast(title, message, type, now, (long) (Math.max(1, Math.min(8, seconds)) * 1_000_000_000L)));
     }
 
-    public void moduleState(String moduleName, boolean enabled) {
-        show(moduleName, enabled ? "已启用" : "已关闭",
-                enabled ? NotificationType.ENABLED : NotificationType.DISABLED);
+    public void moduleState(String moduleName, boolean state) {
+        show("Module", moduleName.replace(" ", "") + (state ? " Enabled" : " Disable"),
+                state ? NotificationType.ENABLED : NotificationType.DISABLED);
     }
 
-    public synchronized void clear() {
-        notifications.clear();
-        lastFrameNanos = 0;
-    }
+    public synchronized void clear() { queue.clear(); lastFrame = 0; }
 
-    @SubscribeEvent
-    public void onOverlay(RenderGameOverlayEvent.Post event) {
-        if (event.type == RenderGameOverlayEvent.ElementType.ALL && Minecraft.getMinecraft().currentScreen == null) {
+    @SubscribeEvent public void onOverlay(RenderGameOverlayEvent.Post event) {
+        Minecraft client = Minecraft.getMinecraft();
+        if (event.type == RenderGameOverlayEvent.ElementType.ALL && client.theWorld != null && client.currentScreen == null) {
             render(event.resolution);
         }
     }
 
-    @SubscribeEvent
-    public void onGuiDraw(GuiScreenEvent.DrawScreenEvent.Post event) {
+    @SubscribeEvent public void onGuiDraw(GuiScreenEvent.DrawScreenEvent.Post event) {
         if (Minecraft.getMinecraft().theWorld != null) render(new ScaledResolution(Minecraft.getMinecraft()));
     }
 
     private synchronized void render(ScaledResolution resolution) {
         long now = System.nanoTime();
-        notifications.removeIf(notification -> now - notification.createdAt >= notification.lifetime);
-        if (notifications.isEmpty() || !enabled.getAsBoolean()) {
-            lastFrameNanos = now;
-            return;
-        }
-
-        double screenWidth = resolution.getScaledWidth_double();
-        double screenHeight = resolution.getScaledHeight_double();
-        if (screenWidth <= 0 || screenHeight <= 0) return;
-        NotificationLayout layout = new NotificationLayout(screenWidth, screenHeight);
-        double delta = lastFrameNanos == 0 ? 0 : Math.min((now - lastFrameNanos) / 1_000_000_000.0, 0.1);
-        lastFrameNanos = now;
-        int visible = Math.min(Math.min(notifications.size(), maximum.getAsInt()), Math.max(1,
-                (int) ((screenHeight - layout.marginY * 2 + layout.gap) / (layout.height + layout.gap))));
-
-        ui.begin(screenWidth, screenHeight);
+        queue.removeIf(toast -> now >= toast.expires);
+        if (queue.isEmpty() || !enabled.getAsBoolean()) { lastFrame = now; return; }
+        double width = resolution.getScaledWidth_double(), height = resolution.getScaledHeight_double();
+        if (width <= 0 || height <= 0) return;
+        NotificationLayout spacing = new NotificationLayout(width, height, 56);
+        float delta = lastFrame == 0 ? 0 : Math.min(0.1f, (now - lastFrame) / 1_000_000_000f);
+        lastFrame = now;
+        int capacity = Math.max(1, (int) ((height - 2 * spacing.margin + spacing.gap) / (spacing.height + spacing.gap)));
+        int visible = Math.min(queue.size(), Math.min(Math.max(1, maximum.getAsInt()), capacity));
+        List<Toast> notifications = new ArrayList<>(queue);
+        ui.begin(width, height);
         try {
             for (int slot = 0; slot < visible; slot++) {
-                Notification notification = notifications.get(notifications.size() - 1 - slot);
-                long age = now - notification.createdAt;
-                double opacity = easeOut(age / (double) ENTER_NANOS)
-                        * easeOut((notification.lifetime - age) / (double) EXIT_NANOS);
-                double targetY = screenHeight - layout.marginY - layout.height
-                        - slot * (layout.height + layout.gap);
-                if (Double.isNaN(notification.y)) {
-                    notification.y = targetY;
-                } else {
-                    notification.y += (targetY - notification.y) * (1 - Math.exp(-18 * delta));
-                }
-
-                float x = (float) (screenWidth - layout.marginX - layout.width + layout.slide * (1 - opacity));
-                renderer.draw(notification.title, notification.message, notification.type, x, (float) notification.y,
-                        layout.width, layout.height, (float) opacity, 1 - age / (float) notification.lifetime,
-                        progress.getAsBoolean());
+                Toast toast = notifications.get(notifications.size() - 1 - slot);
+                NotificationLayout layout = new NotificationLayout(width, height, renderer.naturalWidth(toast.title, toast.message));
+                long age = now - toast.created;
+                float opacity = ease(age / 220_000_000f) * ease((toast.expires - now) / 260_000_000f);
+                float target = (float) height - layout.margin - layout.height - slot * (layout.height + layout.gap);
+                if (Float.isNaN(toast.y)) toast.y = target;
+                else toast.y += (target - toast.y) * (1 - (float) Math.exp(-18 * delta));
+                float x = (float) width - layout.margin - layout.width + 15 * layout.scale * (1 - opacity);
+                renderer.draw(toast.title, toast.message, toast.type, x, toast.y, layout, opacity,
+                        (toast.expires - now) / (float) (toast.expires - toast.created));
             }
-        } finally {
-            ui.end();
-        }
+        } finally { ui.end(); }
     }
 
-    private static double easeOut(double progress) {
-        double clamped = Math.max(0, Math.min(1, progress));
-        return 1 - Math.pow(1 - clamped, 3);
+    private static float ease(float value) {
+        float t = Math.max(0, Math.min(1, value));
+        return 1 - (1 - t) * (1 - t) * (1 - t);
     }
 
-    private static final class Notification {
-        private final String title;
-        private final String message;
-        private final NotificationType type;
-        private final long createdAt;
-        private final long lifetime;
-        private double y = Double.NaN;
-
-        private Notification(String title, String message, NotificationType type, long createdAt, long lifetime) {
-            this.title = title;
-            this.message = message;
-            this.type = type;
-            this.createdAt = createdAt;
-            this.lifetime = lifetime;
+    private static final class Toast {
+        final String title, message;
+        final NotificationType type;
+        final long created, expires;
+        float y = Float.NaN;
+        Toast(String title, String message, NotificationType type, long created, long duration) {
+            this.title = title; this.message = message; this.type = type;
+            this.created = created; expires = created + duration;
         }
     }
 }

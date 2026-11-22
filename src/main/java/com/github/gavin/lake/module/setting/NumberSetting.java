@@ -27,6 +27,7 @@ public final class NumberSetting extends Setting<Double> {
     }
 
     public double fraction() { return (value() - minimum) / (maximum - minimum); }
+    public String unit() { return unit; }
     public void fraction(double fraction) { set(minimum + Math.max(0, Math.min(1, fraction)) * (maximum - minimum)); }
     public String displayValue() {
         return (step >= 1 ? String.format(Locale.ROOT, "%.0f", value()) : String.format(Locale.ROOT, "%.1f", value())) + unit;

@@ -4,8 +4,10 @@ public enum Category {
     COMBAT("Combat"),
     MOVEMENT("Movement"),
     PLAYER("Player"),
+    WORLD("World"),
+    CLIENT("Misc"),
     RENDER("Render"),
-    CLIENT("Client");
+    MINIGAMES("Minigames");
 
     private final String label;
     Category(String label) { this.label = label; }

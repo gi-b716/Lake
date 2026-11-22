@@ -3,7 +3,6 @@ package com.github.gavin.lake.command.commands;
 import com.github.gavin.lake.Lake;
 import com.github.gavin.lake.command.ClientChat;
 import com.github.gavin.lake.command.tree.CommandDispatcher;
-import com.github.gavin.lake.notification.NotificationType;
 
 import static com.github.gavin.lake.command.tree.CommandNode.literal;
 
@@ -13,11 +12,8 @@ public final class TestCommand {
 
     public static void register(CommandDispatcher dispatcher) {
         dispatcher.register(literal("test")
-                .description("Preview acrylic notifications")
-                .executes(context -> {
-                    Lake.notifications().show("Lake", "通知样式预览", NotificationType.INFO);
-                    ClientChat.info("Test notification shown.");
-                })
+                .description("Preview notifications")
+                .executes(context -> previewState(true))
                 .then(literal("on")
                         .description("Preview a module enabled notification")
                         .executes(context -> previewState(true)))
