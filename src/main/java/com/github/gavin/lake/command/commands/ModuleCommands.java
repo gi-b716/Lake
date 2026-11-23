@@ -7,7 +7,7 @@ import com.github.gavin.lake.command.tree.CommandException;
 import com.github.gavin.lake.module.Category;
 import com.github.gavin.lake.module.Module;
 import com.github.gavin.lake.module.ModuleRegistry;
-import com.github.gavin.lake.module.modules.ClickGuiModule;
+import com.github.gavin.lake.module.modules.misc.ClickGuiModule;
 import net.minecraft.util.EnumChatFormatting;
 import org.lwjgl.input.Keyboard;
 

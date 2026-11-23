@@ -1,4 +1,4 @@
-package com.github.gavin.lake.module.modules;
+package com.github.gavin.lake.module.modules.render;
 
 import com.github.gavin.lake.module.Category;
 import com.github.gavin.lake.module.Module;

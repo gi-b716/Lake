@@ -4,9 +4,10 @@ import com.github.gavin.lake.command.ClientChat;
 import com.github.gavin.lake.module.Category;
 import com.github.gavin.lake.module.Module;
 import com.github.gavin.lake.module.ModuleRegistry;
-import com.github.gavin.lake.module.modules.ClickGuiModule;
+import com.github.gavin.lake.module.modules.misc.ClickGuiModule;
 import com.github.gavin.lake.module.setting.BooleanSetting;
 import com.github.gavin.lake.module.setting.NumberSetting;
+import com.github.gavin.lake.module.setting.RangeSetting;
 import com.github.gavin.lake.module.setting.Setting;
 import com.github.gavin.lake.render.LakeRenderer;
 import net.minecraft.client.gui.GuiScreen;
@@ -35,9 +36,10 @@ public final class ClickGuiScreen extends GuiScreen {
     private final SearchInput search = new SearchInput();
     private final Set<Module> expanded = new HashSet<>();
     private final Map<Object, Float> switches = new HashMap<>();
-    private Category category = Category.CLIENT;
+    private Category category = Category.MISC;
     private Module binding;
-    private NumberSetting dragging;
+    private Setting<?> dragging;
+    private boolean draggingUpper, coincidentHandles;
     private float expansion, scroll, frameDelta;
     private long lastFrame;
     private boolean previousRepeat;
@@ -217,6 +219,16 @@ public final class ClickGuiScreen extends GuiScreen {
                 ui.round(x + 17 + fill - 3.4f, top + 13.6f, 6.8f, 6.8f, 3.4f, color(0xFFFFFF, 255, 1));
             } else if (setting instanceof BooleanSetting) {
                 ui.toggle(x + 330, top + 1, switchPosition(setting, ((BooleanSetting) setting).value()), 1);
+            } else if (setting instanceof RangeSetting) {
+                RangeSetting range = (RangeSetting) setting;
+                String value = range.displayValue();
+                ui.text(ui.label(), value, x + 358 - ui.label().width(value), top, 0xC8C8CA, 1);
+                float lower = (float) range.lowerFraction() * 341;
+                float upper = (float) range.upperFraction() * 341;
+                ui.round(x + 17, top + 15.5f, 341, 3, 1.5f, color(0x49494D, 255, 1));
+                ui.round(x + 17 + lower, top + 15.5f, upper - lower, 3, 1.5f, color(0xB9B9BC, 255, 1));
+                ui.round(x + 17 + lower - 3.4f, top + 13.6f, 6.8f, 6.8f, 3.4f, color(0xFFFFFF, 255, 1));
+                ui.round(x + 17 + upper - 3.4f, top + 13.6f, 6.8f, 6.8f, 3.4f, color(0xFFFFFF, 255, 1));
             }
         }
     }
@@ -261,7 +273,16 @@ public final class ClickGuiScreen extends GuiScreen {
                     if (button == 0 && inside(x, y, content + 7, settingY - 4, ROW_WIDTH - 14, 31.5f)) {
                         if (setting instanceof BooleanSetting) ((BooleanSetting) setting).toggle();
                         else if (setting instanceof NumberSetting && y >= settingY + 11) {
-                            dragging = (NumberSetting) setting; dragging.fraction((x - content - 17) / 341);
+                            dragging = setting; updateSlider((x - content - 17) / 341);
+                        } else if (setting instanceof RangeSetting && y >= settingY + 11) {
+                            RangeSetting range = (RangeSetting) setting;
+                            double fraction = (x - content - 17) / 341;
+                            dragging = setting;
+                            draggingUpper = fraction >= (range.lowerFraction() + range.upperFraction()) * 0.5;
+                            // When the handles overlap, the first movement selects the endpoint.
+                            coincidentHandles = range.lower() == range.upper()
+                                    && Math.abs(fraction - range.lowerFraction()) * 341 <= 4;
+                            if (!coincidentHandles) updateSlider(fraction);
                         }
                         return;
                     }
@@ -288,7 +309,20 @@ public final class ClickGuiScreen extends GuiScreen {
     @Override protected void mouseClickMove(int mouseX, int mouseY, int button, long duration) {
         if (dragging != null && button == 0) {
             ClickGuiLayout box = layout();
-            dragging.fraction((box.localX(mouseX) - box.contentX() - 17) / 341);
+            updateSlider((box.localX(mouseX) - box.contentX() - 17) / 341);
+        }
+    }
+
+    private void updateSlider(double fraction) {
+        if (dragging instanceof NumberSetting) ((NumberSetting) dragging).fraction(fraction);
+        else if (dragging instanceof RangeSetting) {
+            RangeSetting range = (RangeSetting) dragging;
+            if (coincidentHandles) {
+                if (Math.abs(fraction - range.lowerFraction()) * 341 <= 4) return;
+                draggingUpper = fraction > range.lowerFraction();
+                coincidentHandles = false;
+            }
+            range.fraction(draggingUpper, fraction);
         }
     }
 

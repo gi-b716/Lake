@@ -84,11 +84,15 @@ public abstract class Module {
     }
 
     public final void preTick() { if (initialized && enabled) onPreTick(); }
+    public final void inputTick() { if (initialized && enabled) onInputTick(); }
     public final void tick() { if (initialized && enabled) onTick(); }
+    public final void renderTick(float partialTicks) { if (initialized && enabled) onRenderTick(partialTicks); }
     protected void onEnable() {}
     protected void onDisable() {}
     protected void onPreTick() {}
+    protected void onInputTick() {}
     protected void onTick() {}
+    protected void onRenderTick(float partialTicks) {}
 
     void attach(Listener listener) {
         if (registered) throw new IllegalArgumentException("Module is already registered");

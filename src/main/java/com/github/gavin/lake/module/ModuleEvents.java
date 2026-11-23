@@ -38,6 +38,27 @@ public final class ModuleEvents {
     }
 
     @SubscribeEvent
+    public void onRenderTick(TickEvent.RenderTickEvent event) {
+        if (event.phase != TickEvent.Phase.START) return;
+        for (Module module : registry.modules()) {
+            try { module.renderTick(event.renderTickTime); } catch (RuntimeException exception) {
+                try { module.setEnabled(false); } catch (RuntimeException ignored) {}
+                failed(module, exception);
+            }
+        }
+    }
+
+    /** Called inside vanilla's input phase, after targeting and before world/player updates. */
+    public void inputTick() {
+        for (Module module : registry.modules()) {
+            try { module.inputTick(); } catch (RuntimeException exception) {
+                try { module.setEnabled(false); } catch (RuntimeException ignored) {}
+                failed(module, exception);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.START) {
             for (Module module : registry.modules()) {

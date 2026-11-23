@@ -1,4 +1,4 @@
-package com.github.gavin.lake.module.modules;
+package com.github.gavin.lake.module.modules.misc;
 
 import com.github.gavin.lake.module.Category;
 import com.github.gavin.lake.module.Module;
@@ -16,7 +16,7 @@ public final class ClickGuiModule extends Module {
     private boolean pendingOpen;
 
     public ClickGuiModule(ModuleRegistry registry, ModuleConfig config) {
-        super("clickgui", "ClickGUI", "Open the module menu.", Category.CLIENT, false, Keyboard.KEY_RSHIFT);
+        super("clickgui", "Click GUI", "Open the module menu.", Category.MISC, false, Keyboard.KEY_RSHIFT);
         this.registry = registry;
         this.config = config;
     }

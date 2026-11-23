@@ -1,4 +1,4 @@
-package com.github.gavin.lake.module.modules;
+package com.github.gavin.lake.module.modules.movement;
 
 import com.github.gavin.lake.compat.Protocols;
 import com.github.gavin.lake.module.Category;

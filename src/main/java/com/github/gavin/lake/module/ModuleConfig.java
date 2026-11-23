@@ -1,6 +1,7 @@
 package com.github.gavin.lake.module;
 
 import com.github.gavin.lake.module.setting.Setting;
+import com.github.gavin.lake.module.setting.RangeSetting;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -72,9 +73,18 @@ public final class ModuleConfig {
     }
 
     private <T> void readSetting(Setting<T> setting, JsonElement saved) {
-        if (!saved.isJsonPrimitive()) return;
-        if (setting.type() == Boolean.class && !saved.getAsJsonPrimitive().isBoolean()) return;
-        if (Number.class.isAssignableFrom(setting.type()) && !saved.getAsJsonPrimitive().isNumber()) return;
+        if (setting instanceof RangeSetting) {
+            if (!saved.isJsonObject()) return;
+            JsonObject range = saved.getAsJsonObject();
+            for (String endpoint : new String[] { "lower", "upper" }) {
+                if (!range.has(endpoint) || !range.get(endpoint).isJsonPrimitive()
+                        || !range.get(endpoint).getAsJsonPrimitive().isNumber()) return;
+            }
+        } else {
+            if (!saved.isJsonPrimitive()) return;
+            if (setting.type() == Boolean.class && !saved.getAsJsonPrimitive().isBoolean()) return;
+            if (Number.class.isAssignableFrom(setting.type()) && !saved.getAsJsonPrimitive().isNumber()) return;
+        }
         try {
             T value = gson.fromJson(saved, setting.type());
             if (value != null) setting.set(value);

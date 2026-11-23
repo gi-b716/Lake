@@ -25,6 +25,7 @@ public final class Lake {
 
     public static ModuleRegistry modules() { return MODULES; }
     public static ModuleConfig config() { return CONFIG; }
+    public static void inputTick() { MODULE_EVENTS.inputTick(); }
 
     public static NotificationManager notifications() {
         return NOTIFICATIONS;

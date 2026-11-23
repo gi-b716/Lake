@@ -5,7 +5,7 @@ public enum Category {
     MOVEMENT("Movement"),
     PLAYER("Player"),
     WORLD("World"),
-    CLIENT("Misc"),
+    MISC("Misc"),
     RENDER("Render"),
     MINIGAMES("Minigames");
 
